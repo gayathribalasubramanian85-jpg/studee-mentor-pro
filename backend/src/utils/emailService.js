@@ -2,11 +2,19 @@ const nodemailer = require('nodemailer');
 
 // Create transporter
 const createTransporter = () => {
+    // Using explicit configuration instead of 'service: gmail' for better reliability on cloud platforms
     return nodemailer.createTransport({
-        service: process.env.EMAIL_SERVICE || 'gmail',
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false, // upgrade later with STARTTLS
+        family: 4, // Force IPv4 to avoid ENETUNREACH errors on Render
         auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS
+        },
+        tls: {
+            // Do not fail on invalid certificates (common on some shared hosts)
+            rejectUnauthorized: false
         }
     });
 };

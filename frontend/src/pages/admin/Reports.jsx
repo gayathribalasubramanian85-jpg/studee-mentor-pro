@@ -40,15 +40,21 @@ export default function AdminReports() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [selectedSemester, setSelectedSemester] = useState("This Semester");
+  // Department admins can only see their own department data
   const [selectedDeptFilter, setSelectedDeptFilter] = useState(currentUser?.department || "All Departments");
   const [isExporting, setIsExporting] = useState(false);
+
+  // Check if user is a department admin (has a specific department)
+  const isDepartmentAdmin = currentUser?.department && currentUser.department !== "All Departments";
 
   useEffect(() => {
     const fetchReports = async () => {
       try {
         setLoading(true);
+        // Department admins can only fetch their own department data
+        const deptFilter = isDepartmentAdmin ? currentUser.department : selectedDeptFilter;
         const reportsData = await adminApi.getReports(
-          selectedDeptFilter === "All Departments" ? "All Departments" : selectedDeptFilter
+          deptFilter === "All Departments" ? "All Departments" : deptFilter
         );
         setData(reportsData);
       } catch (error) {
@@ -60,14 +66,17 @@ export default function AdminReports() {
     };
 
     fetchReports();
-  }, [selectedDeptFilter]); // Add selectedDeptFilter as dependency
+  }, [selectedDeptFilter, isDepartmentAdmin, currentUser?.department]); // Add dependencies
 
   const handleDepartmentChange = (newDept) => {
-    setSelectedDeptFilter(newDept);
-    if (newDept === "All Departments") {
-      toast.info("Showing data for all departments");
-    } else {
-      toast.info(`Filtering data for ${newDept} department`);
+    // Only allow department change if user is not a department admin
+    if (!isDepartmentAdmin) {
+      setSelectedDeptFilter(newDept);
+      if (newDept === "All Departments") {
+        toast.info("Showing data for all departments");
+      } else {
+        toast.info(`Filtering data for ${newDept} department`);
+      }
     }
   };
 
@@ -84,7 +93,8 @@ export default function AdminReports() {
       await new Promise(resolve => setTimeout(resolve, 500));
       
       // Create CSV content
-      const csvContent = generateCSVReport(data, selectedDeptFilter, selectedSemester);
+      const actualDeptFilter = isDepartmentAdmin ? currentUser.department : selectedDeptFilter;
+      const csvContent = generateCSVReport(data, actualDeptFilter, selectedSemester);
       
       // Create and download file
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -93,7 +103,8 @@ export default function AdminReports() {
       if (window.navigator && window.navigator.msSaveOrOpenBlob) {
         // IE/Edge support
         const date = new Date().toISOString().split('T')[0];
-        const deptFilter = selectedDeptFilter === "All Departments" ? "All-Departments" : selectedDeptFilter;
+        const deptFilter = isDepartmentAdmin ? currentUser.department : 
+                          (selectedDeptFilter === "All Departments" ? "All-Departments" : selectedDeptFilter);
         const filename = `Reports-${deptFilter}-${selectedSemester.replace(' ', '-')}-${date}.csv`;
         window.navigator.msSaveOrOpenBlob(blob, filename);
         toast.success(`Report exported successfully as ${filename} (${data.stats.totalStudents} students)`);
@@ -107,7 +118,8 @@ export default function AdminReports() {
           
           // Generate filename with current date and filters
           const date = new Date().toISOString().split('T')[0];
-          const deptFilter = selectedDeptFilter === "All Departments" ? "All-Departments" : selectedDeptFilter;
+          const deptFilter = isDepartmentAdmin ? currentUser.department : 
+                            (selectedDeptFilter === "All Departments" ? "All-Departments" : selectedDeptFilter);
           const filename = `Reports-${deptFilter}-${selectedSemester.replace(' ', '-')}-${date}.csv`;
           
           link.setAttribute('download', filename);
@@ -198,7 +210,10 @@ export default function AdminReports() {
 
       <div className="lg:ml-64">
         <DashboardHeader
-          title={`Reports & Analytics${selectedDeptFilter !== "All Departments" ? ` - ${selectedDeptFilter} Department` : ""}`}
+          title={isDepartmentAdmin 
+            ? `Reports & Analytics - ${currentUser.department} Department` 
+            : `Reports & Analytics${selectedDeptFilter !== "All Departments" ? ` - ${selectedDeptFilter} Department` : ""}`
+          }
           userName={`${currentUser?.department || 'Admin'} Admin`}
         />
 
@@ -226,17 +241,29 @@ export default function AdminReports() {
                     </SelectContent>
                   </Select>
 
-                  <Select value={selectedDeptFilter} onValueChange={handleDepartmentChange}>
+                  <Select 
+                    value={isDepartmentAdmin ? currentUser.department : selectedDeptFilter} 
+                    onValueChange={handleDepartmentChange}
+                    disabled={isDepartmentAdmin}
+                  >
                     <SelectTrigger className="w-full sm:w-[180px]">
                       <SelectValue placeholder="Select department" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="All Departments">All Departments</SelectItem>
-                      <SelectItem value="MCA">MCA</SelectItem>
-                      <SelectItem value="BCA">BCA</SelectItem>
-                      <SelectItem value="IT">IT</SelectItem>
-                      <SelectItem value="CS">CS</SelectItem>
-                      <SelectItem value="DS">DS</SelectItem>
+                      {isDepartmentAdmin ? (
+                        // Department admins can only see their own department
+                        <SelectItem value={currentUser.department}>{currentUser.department}</SelectItem>
+                      ) : (
+                        // Super admins can see all departments
+                        <>
+                          <SelectItem value="All Departments">All Departments</SelectItem>
+                          <SelectItem value="MCA">MCA</SelectItem>
+                          <SelectItem value="BCA">BCA</SelectItem>
+                          <SelectItem value="IT">IT</SelectItem>
+                          <SelectItem value="CS">CS</SelectItem>
+                          <SelectItem value="DS">DS</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

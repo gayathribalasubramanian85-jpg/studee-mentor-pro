@@ -51,6 +51,7 @@ app.use('/api/auth', require('./src/routes/authRoutes'));
 app.use('/api/student', require('./src/routes/studentRoutes'));
 app.use('/api/admin', require('./src/routes/adminRoutes'));
 app.use('/api/placement', require('./src/routes/placementRoutes'));
+app.use('/api/test', require('./src/routes/testRoutes')); // Add test routes
 
 // Root Route
 app.get('/', (req, res) => {

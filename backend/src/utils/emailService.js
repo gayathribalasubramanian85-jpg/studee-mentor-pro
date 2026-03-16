@@ -2,12 +2,12 @@ const nodemailer = require('nodemailer');
 
 // Create transporter
 const createTransporter = () => {
-    // Using explicit configuration instead of 'service: gmail' for better reliability on cloud platforms
+    // Enhanced configuration for production environments
     return nodemailer.createTransport({
         host: 'smtp.gmail.com',
-        port: 587,
-        secure: false, // upgrade later with STARTTLS
-        family: 4, // Force IPv4 to avoid ENETUNREACH errors on Render
+        port: process.env.NODE_ENV === 'production' ? 465 : 587,
+        secure: process.env.NODE_ENV === 'production', // true for 465, false for other ports
+        family: 4, // Force IPv4 to avoid ENETUNREACH errors on cloud platforms
         auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS
@@ -15,7 +15,11 @@ const createTransporter = () => {
         tls: {
             // Do not fail on invalid certificates (common on some shared hosts)
             rejectUnauthorized: false
-        }
+        },
+        // Add timeout settings for production
+        connectionTimeout: 60000, // 60 seconds
+        greetingTimeout: 30000,   // 30 seconds
+        socketTimeout: 60000      // 60 seconds
     });
 };
 
@@ -28,11 +32,30 @@ const sendEmail = async (recipients, subject, htmlContent, textContent = '', adm
         console.log("Admin Info:", adminInfo);
 
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.log("Email credentials not configured, skipping email send");
+            console.error("❌ Email credentials not configured!");
+            console.error("EMAIL_USER:", process.env.EMAIL_USER ? "✓ Set" : "❌ Missing");
+            console.error("EMAIL_PASS:", process.env.EMAIL_PASS ? "✓ Set" : "❌ Missing");
             return { success: false, message: 'Email credentials not configured' };
         }
 
+        console.log("✓ Email credentials found");
+        console.log("✓ EMAIL_USER:", process.env.EMAIL_USER);
+        console.log("✓ NODE_ENV:", process.env.NODE_ENV);
+
         const transporter = createTransporter();
+
+        // Test connection in production
+        if (process.env.NODE_ENV === 'production') {
+            try {
+                console.log("🔍 Testing SMTP connection...");
+                await transporter.verify();
+                console.log("✅ SMTP connection successful");
+            } catch (verifyError) {
+                console.error("❌ SMTP connection failed:", verifyError.message);
+                console.error("Full error:", verifyError);
+                return { success: false, message: `SMTP connection failed: ${verifyError.message}` };
+            }
+        }
 
         // Send email to each recipient individually to avoid exposing email addresses
         const emailPromises = recipients.map(async (email) => {
